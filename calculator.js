@@ -1227,3 +1227,23 @@ const DrawSizeCalc = () => {
 ReactDOM.createRoot(document.getElementById("root")).render(
   /*#__PURE__*/React.createElement(DrawSizeCalc, null)
 );
+
+// Right-edge fade on .box-scroll tables: hide once scrolled to the end
+(function () {
+  function checkFade(el) {
+    var atEnd = el.scrollWidth - el.scrollLeft - el.clientWidth <= 1;
+    el.classList.toggle("scrolled-end", atEnd);
+  }
+  function checkAll() {
+    document.querySelectorAll(".box-scroll").forEach(checkFade);
+  }
+  document.addEventListener("scroll", function (e) {
+    if (e.target.classList && e.target.classList.contains("box-scroll")) checkFade(e.target);
+  }, true);
+  window.addEventListener("resize", checkAll);
+  new MutationObserver(checkAll).observe(document.getElementById("root"), {
+    childList: true,
+    subtree: true
+  });
+  checkAll();
+})();

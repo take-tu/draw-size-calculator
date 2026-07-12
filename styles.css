@@ -256,6 +256,9 @@ img { max-width: 100%; display: block; }
   transition: opacity 0.2s;
 }
 .box-scroll.scrolled-end::after { opacity: 0; }
+@media (min-width: 901px) {
+  .box-scroll::after { display: none; }
+}
 
 .card {
   background: var(--cream);
