@@ -445,6 +445,8 @@ const DrawSizeCalc = () => {
       color: "var(--muted)"
     }
   }, "min"))), /*#__PURE__*/React.createElement("div", {
+    className: "box-scroll-outer"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "box-scroll"
   }, /*#__PURE__*/React.createElement("table", {
     style: {
@@ -638,7 +640,9 @@ const DrawSizeCalc = () => {
       fontWeight: 700,
       color: "var(--ink)"
     }
-  }, maxSlots))))))), /*#__PURE__*/React.createElement("div", {
+  }, maxSlots)))))), /*#__PURE__*/React.createElement("div", {
+    className: "box-scroll-fade"
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       borderRadius: 8,
       marginBottom: 16,
@@ -754,6 +758,8 @@ const DrawSizeCalc = () => {
       padding: 0,
       clipPath: "inset(0 round var(--radius))"
     }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "box-scroll-outer"
   }, /*#__PURE__*/React.createElement("div", {
     className: "box-scroll"
   }, /*#__PURE__*/React.createElement("table", {
@@ -1012,6 +1018,8 @@ const DrawSizeCalc = () => {
       color: statusColor
     }
   }, totalMatches)), /*#__PURE__*/React.createElement("td", null))))), /*#__PURE__*/React.createElement("div", {
+    className: "box-scroll-fade"
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 14px",
       borderTop: "1px dashed var(--line-strong)",
@@ -1228,11 +1236,15 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   /*#__PURE__*/React.createElement(DrawSizeCalc, null)
 );
 
-// Right-edge fade on .box-scroll tables: hide once scrolled to the end
+// Right-edge fade on .box-scroll tables: only shown at rest (scrollLeft 0),
+// hidden immediately on any rightward scroll, shown again once scrolled
+// back to the start.
 (function () {
   function checkFade(el) {
-    var atEnd = el.scrollWidth - el.scrollLeft - el.clientWidth <= 1;
-    el.classList.toggle("scrolled-end", atEnd);
+    var outer = el.closest(".box-scroll-outer");
+    if (!outer) return;
+    var noOverflow = el.scrollWidth <= el.clientWidth;
+    outer.classList.toggle("scrolled", noOverflow || el.scrollLeft > 0);
   }
   function checkAll() {
     document.querySelectorAll(".box-scroll").forEach(checkFade);

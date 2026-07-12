@@ -243,21 +243,24 @@ img { max-width: 100%; display: block; }
 .box-padded { padding: 20px; }
 .box-padded-lg { padding: 28px; }
 .box-padded-sm { padding: 16px; }
-.box-scroll { overflow-x: auto; position: relative; }
-/* Scroll shadow: right-edge fade hints at overflow content */
-.box-scroll::after {
-  content: "";
+.box-scroll-outer { position: relative; }
+.box-scroll { overflow-x: auto; }
+/* Scroll shadow: right-edge fade hints at overflow content.
+   Rendered as a sibling overlay (not a pseudo-element of the scrolling
+   div) so it never scrolls with the table content — only the toggled
+   class controls its visibility. */
+.box-scroll-fade {
   position: absolute;
   top: 0; right: 0; bottom: 0;
   width: 48px;
   background: linear-gradient(to right, transparent, var(--cream));
   pointer-events: none;
   border-radius: 0 var(--radius) var(--radius) 0;
-  transition: opacity 0.2s;
+  opacity: 1;
 }
-.box-scroll.scrolled-end::after { opacity: 0; }
+.box-scroll-outer.scrolled .box-scroll-fade { opacity: 0; }
 @media (min-width: 901px) {
-  .box-scroll::after { display: none; }
+  .box-scroll-fade { display: none; }
 }
 
 .card {
@@ -825,7 +828,7 @@ body[data-density="airy"] { --gutter: 48px; --section-pad: 128px; }
 
   /* tables */
   .box { width: 100%; box-sizing: border-box; }
-  .box-scroll { width: 100%; min-width: 0; }
+  .box-scroll-outer, .box-scroll { width: 100%; min-width: 0; }
   .tbl { font-size: 12px; table-layout: auto; min-width: 100%; }
   .tbl th { font-size: 10px; }
   .tbl th, .tbl td { padding: 10px 12px; }
