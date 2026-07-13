@@ -13,6 +13,36 @@ const DIVISIONS = [{
 }, {
   code: "D",
   label: "D"
+}, {
+  code: "WomensOpen",
+  label: "Women's Open"
+}, {
+  code: "WomensA",
+  label: "Women's A"
+}, {
+  code: "WomensB",
+  label: "Women's B"
+}, {
+  code: "WomensC",
+  label: "Women's C"
+}, {
+  code: "WomensD",
+  label: "Women's D"
+}, {
+  code: "MixedOpen",
+  label: "Mixed Open"
+}, {
+  code: "MixedA",
+  label: "Mixed A"
+}, {
+  code: "MixedB",
+  label: "Mixed B"
+}, {
+  code: "MixedC",
+  label: "Mixed C"
+}, {
+  code: "MixedD",
+  label: "Mixed D"
 }];
 function calcSinglesMatches(n, cons) {
   if (!n || n < 2) return 0;
@@ -103,6 +133,46 @@ var PRESET_DEFAULT = {
   D: {
     s: 16,
     d: 8
+  },
+  WomensOpen: {
+    s: 0,
+    d: 0
+  },
+  WomensA: {
+    s: 0,
+    d: 0
+  },
+  WomensB: {
+    s: 0,
+    d: 0
+  },
+  WomensC: {
+    s: 0,
+    d: 0
+  },
+  WomensD: {
+    s: 0,
+    d: 0
+  },
+  MixedOpen: {
+    s: 0,
+    d: 0
+  },
+  MixedA: {
+    s: 0,
+    d: 0
+  },
+  MixedB: {
+    s: 0,
+    d: 0
+  },
+  MixedC: {
+    s: 0,
+    d: 0
+  },
+  MixedD: {
+    s: 0,
+    d: 0
   }
 };
 var PRESET_SAFE = {
@@ -125,6 +195,46 @@ var PRESET_SAFE = {
   D: {
     s: 16,
     d: 8
+  },
+  WomensOpen: {
+    s: 0,
+    d: 0
+  },
+  WomensA: {
+    s: 0,
+    d: 0
+  },
+  WomensB: {
+    s: 0,
+    d: 0
+  },
+  WomensC: {
+    s: 0,
+    d: 0
+  },
+  WomensD: {
+    s: 0,
+    d: 0
+  },
+  MixedOpen: {
+    s: 0,
+    d: 0
+  },
+  MixedA: {
+    s: 0,
+    d: 0
+  },
+  MixedB: {
+    s: 0,
+    d: 0
+  },
+  MixedC: {
+    s: 0,
+    d: 0
+  },
+  MixedD: {
+    s: 0,
+    d: 0
   }
 };
 
@@ -133,6 +243,12 @@ var CUSTOM_DIV_DEFAULT = {
   s: 16,
   d: 8
 };
+
+// Women's singles/doubles and Mixed singles start with consolation unchecked
+// (doubles consolation already defaults to unchecked for every division)
+function defaultSconsFor(code) {
+  return !/^Womens/.test(code) && !/^Mixed/.test(code);
+}
 function makeInitDivs(divList) {
   var list = divList || DIVISIONS;
   var out = {};
@@ -141,7 +257,7 @@ function makeInitDivs(divList) {
     out[d.code] = {
       s: p.s,
       d: p.d,
-      scons: true,
+      scons: defaultSconsFor(d.code),
       dcons: false
     };
   });
@@ -226,7 +342,7 @@ const DrawSizeCalc = () => {
         next[d.code] = Object.assign({}, prev[d.code], {
           s: p.s,
           d: p.d,
-          scons: preset === PRESET_DEFAULT ? true : prev[d.code] && prev[d.code].s >= 4 ? prev[d.code].scons : false
+          scons: preset === PRESET_DEFAULT ? defaultSconsFor(d.code) : prev[d.code] && prev[d.code].s >= 4 ? prev[d.code].scons : false
         });
       });
       return next;
@@ -795,6 +911,7 @@ const DrawSizeCalc = () => {
       dcons = divs[div.code].dcons;
     var sm = calcSinglesMatches(s, scons),
       dm = calcDoublesMatches(d, dcons);
+    var isMixed = /^Mixed/.test(div.code);
     return /*#__PURE__*/React.createElement("tr", {
       key: div.code,
       style: {
@@ -820,10 +937,16 @@ const DrawSizeCalc = () => {
         padding: "5px 6px",
         textAlign: "center"
       }
-    }, /*#__PURE__*/React.createElement("input", {
+    }, isMixed ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "—") : /*#__PURE__*/React.createElement("input", {
       type: "number",
       value: getRaw(div.code, "s") !== "" ? getRaw(div.code, "s") : s === 0 ? "" : s,
       placeholder: "0",
+      min: 0,
+      max: 64,
       onChange: e => setRaw(div.code, "s", e.target.value),
       onBlur: e => {
         clearRaw(div.code, "s");
@@ -845,7 +968,11 @@ const DrawSizeCalc = () => {
         padding: "5px 6px",
         textAlign: "center"
       }
-    }, s >= 4 ? /*#__PURE__*/React.createElement("input", {
+    }, isMixed ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "—") : s >= 4 ? /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
       checked: scons,
       onChange: e => updateDiv(div.code, {
@@ -872,7 +999,7 @@ const DrawSizeCalc = () => {
         fontSize: 12,
         color: s === 0 ? "var(--muted)" : "var(--ink)"
       }
-    }, s === 0 ? "—" : calcSeedsFor(s))), /*#__PURE__*/React.createElement("td", {
+    }, isMixed ? "—" : s === 0 ? "—" : calcSeedsFor(s))), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "5px 6px",
         textAlign: "center"
@@ -881,6 +1008,8 @@ const DrawSizeCalc = () => {
       type: "number",
       value: getRaw(div.code, "d") !== "" ? getRaw(div.code, "d") : d === 0 ? "" : d,
       placeholder: "0",
+      min: 0,
+      max: 64,
       onChange: e => setRaw(div.code, "d", e.target.value),
       onBlur: e => {
         clearRaw(div.code, "d");
@@ -1045,7 +1174,7 @@ const DrawSizeCalc = () => {
     onKeyDown: e => {
       if (e.key === "Enter") addDivision();
     },
-    placeholder: "e.g. 40+ Open, Women's B\u2026",
+    placeholder: "e.g. 40+ Open",
     style: {
       flex: 1,
       minWidth: 0,
