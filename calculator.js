@@ -1,4 +1,4 @@
-const DIVISIONS = [{
+const LEVELS = [{
   code: "Open",
   label: "Open"
 }, {
@@ -238,22 +238,22 @@ var PRESET_SAFE = {
   }
 };
 
-// Default draw sizes for any custom division added by the TD
-var CUSTOM_DIV_DEFAULT = {
+// Default draw sizes for any custom level added by the TD
+var CUSTOM_LEVEL_DEFAULT = {
   s: 16,
   d: 8
 };
 
 // Women's singles/doubles and Mixed singles start with consolation unchecked
-// (doubles consolation already defaults to unchecked for every division)
+// (doubles consolation already defaults to unchecked for every level)
 function defaultSconsFor(code) {
   return !/^Womens/.test(code) && !/^Mixed/.test(code);
 }
-function makeInitDivs(divList) {
-  var list = divList || DIVISIONS;
+function makeInitLevels(levelList) {
+  var list = levelList || LEVELS;
   var out = {};
   list.forEach(function (d) {
-    var p = PRESET_DEFAULT[d.code] || CUSTOM_DIV_DEFAULT;
+    var p = PRESET_DEFAULT[d.code] || CUSTOM_LEVEL_DEFAULT;
     out[d.code] = {
       s: p.s,
       d: p.d,
@@ -269,19 +269,19 @@ const DrawSizeCalc = () => {
   const [courtsPerDay, setCourtsPerDay] = React.useState([10, 10, 10]);
   const [slotDur, setSlotDur] = React.useState(90);
 
-  // Extra divisions added by the TD (beyond the base 5)
-  const [extraDivs, setExtraDivs] = React.useState([]); // [{ code, label }]
-  const [newDivName, setNewDivName] = React.useState("");
-  const allDivisions = React.useMemo(() => [...DIVISIONS, ...extraDivs], [extraDivs]);
-  const [divs, setDivs] = React.useState(() => makeInitDivs(DIVISIONS));
+  // Extra levels added by the TD (beyond the base 5)
+  const [extraLevels, setExtraLevels] = React.useState([]); // [{ code, label }]
+  const [newLevelName, setNewLevelName] = React.useState("");
+  const allLevels = React.useMemo(() => [...LEVELS, ...extraLevels], [extraLevels]);
+  const [levels, setLevels] = React.useState(() => makeInitLevels(LEVELS));
   // Raw string values for draw inputs — keeps display in sync while typing
   // without committing intermediate values that would hide consolation checkboxes
-  const [rawDivs, setRawDivs] = React.useState({});
+  const [rawLevels, setRawLevels] = React.useState({});
   function getRaw(code, field) {
-    return rawDivs[code] && rawDivs[code][field] != null ? rawDivs[code][field] : "";
+    return rawLevels[code] && rawLevels[code][field] != null ? rawLevels[code][field] : "";
   }
   function setRaw(code, field, val) {
-    setRawDivs(function (prev) {
+    setRawLevels(function (prev) {
       var n = Object.assign({}, prev);
       n[code] = Object.assign({}, n[code], {});
       n[code][field] = val;
@@ -289,7 +289,7 @@ const DrawSizeCalc = () => {
     });
   }
   function clearRaw(code, field) {
-    setRawDivs(function (prev) {
+    setRawLevels(function (prev) {
       var n = Object.assign({}, prev);
       if (n[code]) {
         n[code] = Object.assign({}, n[code]);
@@ -329,16 +329,16 @@ const DrawSizeCalc = () => {
     return a + b;
   }, 0);
   const safeSlots = Math.floor(maxSlots * 0.91);
-  function updateDiv(code, patch) {
-    setDivs(prev => Object.assign({}, prev, {
+  function updateLevel(code, patch) {
+    setLevels(prev => Object.assign({}, prev, {
       [code]: Object.assign({}, prev[code], patch)
     }));
   }
   function applyPreset(preset) {
-    setDivs(prev => {
+    setLevels(prev => {
       var next = {};
-      allDivisions.forEach(function (d) {
-        var p = preset[d.code] || CUSTOM_DIV_DEFAULT;
+      allLevels.forEach(function (d) {
+        var p = preset[d.code] || CUSTOM_LEVEL_DEFAULT;
         next[d.code] = Object.assign({}, prev[d.code], {
           s: p.s,
           d: p.d,
@@ -348,30 +348,30 @@ const DrawSizeCalc = () => {
       return next;
     });
   }
-  function addDivision() {
-    var name = newDivName.trim();
+  function addLevel() {
+    var name = newLevelName.trim();
     if (!name) return;
     // Generate a unique code from the name
     var code = "custom_" + name.replace(/\s+/g, "_").toLowerCase() + "_" + Date.now();
-    var newDiv = {
+    var newLevel = {
       code: code,
       label: name,
       isCustom: true
     };
-    setExtraDivs(prev => [...prev, newDiv]);
-    setDivs(prev => Object.assign({}, prev, {
+    setExtraLevels(prev => [...prev, newLevel]);
+    setLevels(prev => Object.assign({}, prev, {
       [code]: {
-        s: CUSTOM_DIV_DEFAULT.s,
-        d: CUSTOM_DIV_DEFAULT.d,
+        s: CUSTOM_LEVEL_DEFAULT.s,
+        d: CUSTOM_LEVEL_DEFAULT.d,
         scons: true,
         dcons: false
       }
     }));
-    setNewDivName("");
+    setNewLevelName("");
   }
-  function removeDivision(code) {
-    setExtraDivs(prev => prev.filter(d => d.code !== code));
-    setDivs(prev => {
+  function removeLevel(code) {
+    setExtraLevels(prev => prev.filter(d => d.code !== code));
+    setLevels(prev => {
       var n = Object.assign({}, prev);
       delete n[code];
       return n;
@@ -380,19 +380,19 @@ const DrawSizeCalc = () => {
   var totalMatches = 0,
     totalPlayers = 0,
     totalTeams = 0;
-  allDivisions.forEach(function (d) {
-    if (!divs[d.code]) return;
-    totalMatches += calcSinglesMatches(divs[d.code].s, divs[d.code].scons) + calcDoublesMatches(divs[d.code].d, divs[d.code].dcons);
-    totalPlayers += divs[d.code].s;
-    totalTeams += divs[d.code].d;
+  allLevels.forEach(function (d) {
+    if (!levels[d.code]) return;
+    totalMatches += calcSinglesMatches(levels[d.code].s, levels[d.code].scons) + calcDoublesMatches(levels[d.code].d, levels[d.code].dcons);
+    totalPlayers += levels[d.code].s;
+    totalTeams += levels[d.code].d;
   });
   var dayTotals = [];
   var di;
   for (di = 0; di < days; di++) dayTotals.push(0);
-  allDivisions.forEach(function (div) {
-    if (!divs[div.code]) return;
-    var ss = scheduleByDay(divs[div.code].s, days, divs[div.code].scons);
-    var ds = scheduleByDay(divs[div.code].d, days, divs[div.code].dcons);
+  allLevels.forEach(function (level) {
+    if (!levels[level.code]) return;
+    var ss = scheduleByDay(levels[level.code].s, days, levels[level.code].scons);
+    var ds = scheduleByDay(levels[level.code].d, days, levels[level.code].dcons);
     for (di = 0; di < days; di++) dayTotals[di] += (ss[di] || 0) + (ds[di] || 0);
   });
   var statusColor = totalMatches <= safeSlots ? "#2d7a2d" : totalMatches <= maxSlots ? "#8a6000" : "#b52222";
@@ -868,7 +868,7 @@ const DrawSizeCalc = () => {
     style: Object.assign({}, labelRow, {
       marginBottom: 10
     })
-  }, "Divisions"), /*#__PURE__*/React.createElement("div", {
+  }, "Levels"), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: 0,
@@ -900,20 +900,20 @@ const DrawSizeCalc = () => {
       textTransform: "uppercase",
       whiteSpace: "nowrap"
     }
-  }, "Division"), ["Singles", "Cons", "Seeds", "Doubles", "Cons", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
+  }, "Level"), ["Singles", "Cons", "Seeds", "Doubles", "Cons", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
     style: thStyle
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, allDivisions.map((div, i) => {
-    if (!divs[div.code]) return null;
-    var s = divs[div.code].s,
-      d = divs[div.code].d;
-    var scons = divs[div.code].scons,
-      dcons = divs[div.code].dcons;
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, allLevels.map((level, i) => {
+    if (!levels[level.code]) return null;
+    var s = levels[level.code].s,
+      d = levels[level.code].d;
+    var scons = levels[level.code].scons,
+      dcons = levels[level.code].dcons;
     var sm = calcSinglesMatches(s, scons),
       dm = calcDoublesMatches(d, dcons);
-    var isMixed = /^Mixed/.test(div.code);
+    var isMixed = /^Mixed/.test(level.code);
     return /*#__PURE__*/React.createElement("tr", {
-      key: div.code,
+      key: level.code,
       style: {
         borderBottom: "1px solid var(--line)",
         background: i % 2 === 0 ? "transparent" : "var(--cream-deep)"
@@ -925,7 +925,7 @@ const DrawSizeCalc = () => {
         fontSize: 13,
         whiteSpace: "nowrap"
       }
-    }, div.label, div.isCustom && /*#__PURE__*/React.createElement("span", {
+    }, level.label, level.isCustom && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 12,
         fontWeight: 400,
@@ -943,15 +943,15 @@ const DrawSizeCalc = () => {
       }
     }, "—") : /*#__PURE__*/React.createElement("input", {
       type: "number",
-      value: getRaw(div.code, "s") !== "" ? getRaw(div.code, "s") : s === 0 ? "" : s,
+      value: getRaw(level.code, "s") !== "" ? getRaw(level.code, "s") : s === 0 ? "" : s,
       placeholder: "0",
       min: 0,
       max: 64,
-      onChange: e => setRaw(div.code, "s", e.target.value),
+      onChange: e => setRaw(level.code, "s", e.target.value),
       onBlur: e => {
-        clearRaw(div.code, "s");
+        clearRaw(level.code, "s");
         var v = e.target.value === "" ? 0 : Math.max(0, Math.min(64, Number(e.target.value) || 0));
-        updateDiv(div.code, {
+        updateLevel(level.code, {
           s: v,
           scons: v < 4 ? false : scons
         });
@@ -975,7 +975,7 @@ const DrawSizeCalc = () => {
     }, "—") : s >= 4 ? /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
       checked: scons,
-      onChange: e => updateDiv(div.code, {
+      onChange: e => updateLevel(level.code, {
         scons: e.target.checked
       }),
       style: {
@@ -1006,15 +1006,15 @@ const DrawSizeCalc = () => {
       }
     }, /*#__PURE__*/React.createElement("input", {
       type: "number",
-      value: getRaw(div.code, "d") !== "" ? getRaw(div.code, "d") : d === 0 ? "" : d,
+      value: getRaw(level.code, "d") !== "" ? getRaw(level.code, "d") : d === 0 ? "" : d,
       placeholder: "0",
       min: 0,
       max: 64,
-      onChange: e => setRaw(div.code, "d", e.target.value),
+      onChange: e => setRaw(level.code, "d", e.target.value),
       onBlur: e => {
-        clearRaw(div.code, "d");
+        clearRaw(level.code, "d");
         var v = e.target.value === "" ? 0 : Math.max(0, Math.min(64, Number(e.target.value) || 0));
-        updateDiv(div.code, {
+        updateLevel(level.code, {
           d: v,
           dcons: v < 4 ? false : dcons
         });
@@ -1034,7 +1034,7 @@ const DrawSizeCalc = () => {
     }, d >= 4 ? /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
       checked: dcons,
-      onChange: e => updateDiv(div.code, {
+      onChange: e => updateLevel(level.code, {
         dcons: e.target.checked
       }),
       style: {
@@ -1081,8 +1081,8 @@ const DrawSizeCalc = () => {
         textAlign: "center",
         width: 24
       }
-    }, div.isCustom && /*#__PURE__*/React.createElement("button", {
-      onClick: () => removeDivision(div.code),
+    }, level.isCustom && /*#__PURE__*/React.createElement("button", {
+      onClick: () => removeLevel(level.code),
       style: {
         border: "none",
         background: "none",
@@ -1167,12 +1167,12 @@ const DrawSizeCalc = () => {
       whiteSpace: "nowrap",
       flex: "0 0 auto"
     }
-  }, "+ Division"), /*#__PURE__*/React.createElement("input", {
+  }, "+ Level"), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    value: newDivName,
-    onChange: e => setNewDivName(e.target.value),
+    value: newLevelName,
+    onChange: e => setNewLevelName(e.target.value),
     onKeyDown: e => {
-      if (e.key === "Enter") addDivision();
+      if (e.key === "Enter") addLevel();
     },
     placeholder: "e.g. 40+ Open",
     style: {
@@ -1188,12 +1188,12 @@ const DrawSizeCalc = () => {
     }
   }), /*#__PURE__*/React.createElement("button", {
     className: "btn",
-    onClick: addDivision,
-    disabled: !newDivName.trim(),
+    onClick: addLevel,
+    disabled: !newLevelName.trim(),
     style: {
       fontSize: 11,
       flexShrink: 0,
-      opacity: newDivName.trim() ? 1 : 0.4
+      opacity: newLevelName.trim() ? 1 : 0.4
     }
   }, "Add")))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1303,21 +1303,21 @@ const DrawSizeCalc = () => {
     style: Object.assign({}, labelRow, {
       marginBottom: 10
     })
-  }, "By division"), /*#__PURE__*/React.createElement("div", {
+  }, "By level"), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: "14px",
       overflow: "hidden"
     }
-  }, allDivisions.map(function (div) {
-    if (!divs[div.code]) return null;
-    var s = divs[div.code].s,
-      d = divs[div.code].d;
+  }, allLevels.map(function (level) {
+    if (!levels[level.code]) return null;
+    var s = levels[level.code].s,
+      d = levels[level.code].d;
     if (s === 0 && d === 0) return null;
-    var ss = scheduleByDay(s, days, divs[div.code].scons);
-    var ds = scheduleByDay(d, days, divs[div.code].dcons);
+    var ss = scheduleByDay(s, days, levels[level.code].scons);
+    var ds = scheduleByDay(d, days, levels[level.code].dcons);
     return /*#__PURE__*/React.createElement("div", {
-      key: div.code,
+      key: level.code,
       style: {
         display: "flex",
         alignItems: "center",
@@ -1334,7 +1334,7 @@ const DrawSizeCalc = () => {
         textOverflow: "ellipsis",
         whiteSpace: "nowrap"
       }
-    }, div.label), dayTotals.map(function (_, idx) {
+    }, level.label), dayTotals.map(function (_, idx) {
       var n = (ss[idx] || 0) + (ds[idx] || 0);
       return /*#__PURE__*/React.createElement("span", {
         key: idx,
@@ -1357,7 +1357,7 @@ const DrawSizeCalc = () => {
         fontSize: 10,
         color: "var(--muted)"
       }
-    }, "=", calcSinglesMatches(s, divs[div.code].scons) + calcDoublesMatches(d, divs[div.code].dcons)));
+    }, "=", calcSinglesMatches(s, levels[level.code].scons) + calcDoublesMatches(d, levels[level.code].dcons)));
   }))))));
 };
 
