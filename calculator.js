@@ -1,19 +1,4 @@
 const LEVELS = [{
-  code: "Open",
-  label: "Open"
-}, {
-  code: "A",
-  label: "A"
-}, {
-  code: "B",
-  label: "B"
-}, {
-  code: "C",
-  label: "C"
-}, {
-  code: "D",
-  label: "D"
-}, {
   code: "WomensOpen",
   label: "Women's Open"
 }, {
@@ -28,6 +13,21 @@ const LEVELS = [{
 }, {
   code: "WomensD",
   label: "Women's D"
+}, {
+  code: "Open",
+  label: "Open"
+}, {
+  code: "A",
+  label: "A"
+}, {
+  code: "B",
+  label: "B"
+}, {
+  code: "C",
+  label: "C"
+}, {
+  code: "D",
+  label: "D"
 }, {
   code: "MixedOpen",
   label: "Mixed Open"
@@ -44,13 +44,67 @@ const LEVELS = [{
   code: "MixedD",
   label: "Mixed D"
 }];
-function calcSinglesMatches(n, cons) {
+
+// Which gender-filter bucket a level code belongs to. Custom (TD-added)
+// levels are their own "custom" bucket — it has no checkbox, so they're
+// always shown and never cleared by toggling a gender filter.
+function categoryFor(code) {
+  if (/^custom_/.test(code)) return "custom";
+  if (/^Womens/.test(code)) return "womens";
+  if (/^Mixed/.test(code)) return "mixed";
+  return "any";
+}
+var GENDER_FILTERS = [["womens", "Women"], ["any", "Any Gender"], ["mixed", "Mixed"]];
+// Only Women's is shown by default — Any Gender and Mixed start unchecked
+var DEFAULT_GENDER_FILTERS = {
+  womens: true,
+  any: false,
+  mixed: false
+};
+
+// Split n entrants into `groups` round-robin pools as evenly as possible
+function splitEven(n, groups) {
+  if (!n || !groups || groups < 1) return [];
+  var base = Math.floor(n / groups),
+    rem = n % groups;
+  var sizes = [];
+  for (var i = 0; i < groups; i++) sizes.push(base + (i < rem ? 1 : 0));
+  return sizes;
+}
+
+// Total round-robin matches across all pools (every pair within a pool plays once)
+function rrGroupMatches(n, groups) {
+  return splitEven(n, groups).reduce(function (sum, size) {
+    return sum + size * (size - 1) / 2;
+  }, 0);
+}
+function calcBracketMatches(n, cons) {
   if (!n || n < 2) return 0;
   return n - 1 + (cons && n >= 4 ? Math.floor(n / 2) - 1 : 0);
 }
-function calcDoublesMatches(n, cons) {
+
+// Eligible for a consolation bracket. Once round robin is selected, cons
+// isn't offered at all — only the standard single-elim bracket supports it.
+function consEligible(n, rrGroups) {
+  return !rrGroups && n >= 4;
+}
+
+// rrGroups >= 1: round-robin group stage, plus (when there's more than one
+// group) a single-elim playoff among the group winners, one per group.
+// A single group is just round robin end to end — no playoff.
+function calcSinglesMatches(n, cons, rrGroups) {
   if (!n || n < 2) return 0;
-  return n - 1 + (cons && n >= 4 ? Math.floor(n / 2) - 1 : 0);
+  if (rrGroups && rrGroups >= 1) {
+    return rrGroupMatches(n, rrGroups) + calcBracketMatches(rrGroups, cons);
+  }
+  return calcBracketMatches(n, cons);
+}
+function calcDoublesMatches(n, cons, rrGroups) {
+  if (!n || n < 2) return 0;
+  if (rrGroups && rrGroups >= 1) {
+    return rrGroupMatches(n, rrGroups) + calcBracketMatches(rrGroups, cons);
+  }
+  return calcBracketMatches(n, cons);
 }
 
 // Build per-round match list for any draw size using bracket progression
@@ -65,18 +119,25 @@ function buildRounds(n) {
 }
 
 // Day-by-day schedule:
-//   Last day  → SF + F (final 2 rounds)
-//   Early rounds distributed evenly across days 0..days-2
+//   Last day  → SF + F (final 2 rounds of the elimination stage)
+//   Early elimination rounds distributed evenly across days 0..days-2
 //   Consolation starts day 1, spread over days 1..last-1
-function scheduleByDay(n, days, cons) {
+//   When rrGroups >= 1, n is split into round-robin pools (played across the
+//   early days), and the elimination stage above runs on the pool winners
+//   (rrGroups players) instead of the full field. A single group has no
+//   playoff, so its round-robin matches spread across every day instead.
+function scheduleByDay(n, days, cons, rrGroups) {
   var result = new Array(days).fill(0);
   if (!n || n < 2 || days < 1) return result;
-  var mainRounds = buildRounds(n);
+  var isRR = rrGroups && rrGroups >= 1;
+  var mainRounds = buildRounds(isRR ? rrGroups : n);
   var totalRounds = mainRounds.length;
+  var rrMatches = isRR ? rrGroupMatches(n, rrGroups) : 0;
+
   if (days === 1) {
     result[0] = mainRounds.reduce(function (a, b) {
       return a + b;
-    }, 0);
+    }, 0) + rrMatches;
   } else {
     // Last day: SF + F (last 2 rounds)
     var lastStart = Math.max(0, totalRounds - 2);
@@ -90,11 +151,23 @@ function scheduleByDay(n, days, cons) {
       var di = Math.min(earlyDays - 1, Math.floor(idx * earlyDays / (earlyRounds.length || 1)));
       result[di] += m;
     });
+
+    // Round-robin pool play happens before the playoff bracket — spread evenly
+    // across the early days too. With a single group there's no playoff to
+    // reserve the last day for, so spread across every day instead.
+    if (rrMatches > 0) {
+      var rrDays = totalRounds > 0 ? earlyDays : days;
+      var rrBase = Math.floor(rrMatches / rrDays),
+        rrRem = rrMatches % rrDays;
+      for (var rd = 0; rd < rrDays; rd++) result[rd] += rrBase + (rd < rrRem ? 1 : 0);
+    }
   }
 
   // Consolation: starts day 1, spread across days 1..days-1
-  if (cons && n >= 4) {
-    var consRounds = buildRounds(Math.floor(n / 2));
+  // (based on the elimination-stage field: rrGroups if round robin, else n)
+  var consBase = isRR ? rrGroups : n;
+  if (cons && consBase >= 4) {
+    var consRounds = buildRounds(Math.floor(consBase / 2));
     var consDays = Math.max(1, days - 1);
     consRounds.forEach(function (m, idx) {
       var di = 1 + Math.min(consDays - 1, Math.floor(idx * consDays / (consRounds.length || 1)));
@@ -135,106 +208,44 @@ var PRESET_DEFAULT = {
     d: 8
   },
   WomensOpen: {
-    s: 0,
-    d: 0
+    s: 16,
+    d: 8
   },
   WomensA: {
-    s: 0,
-    d: 0
+    s: 32,
+    d: 16
   },
   WomensB: {
-    s: 0,
-    d: 0
+    s: 32,
+    d: 16
   },
   WomensC: {
-    s: 0,
-    d: 0
+    s: 16,
+    d: 8
   },
   WomensD: {
-    s: 0,
-    d: 0
+    s: 16,
+    d: 8
   },
   MixedOpen: {
     s: 0,
-    d: 0
+    d: 8
   },
   MixedA: {
     s: 0,
-    d: 0
+    d: 16
   },
   MixedB: {
     s: 0,
-    d: 0
+    d: 16
   },
   MixedC: {
     s: 0,
-    d: 0
+    d: 8
   },
   MixedD: {
     s: 0,
-    d: 0
-  }
-};
-var PRESET_SAFE = {
-  Open: {
-    s: 16,
     d: 8
-  },
-  A: {
-    s: 16,
-    d: 8
-  },
-  B: {
-    s: 16,
-    d: 8
-  },
-  C: {
-    s: 16,
-    d: 8
-  },
-  D: {
-    s: 16,
-    d: 8
-  },
-  WomensOpen: {
-    s: 0,
-    d: 0
-  },
-  WomensA: {
-    s: 0,
-    d: 0
-  },
-  WomensB: {
-    s: 0,
-    d: 0
-  },
-  WomensC: {
-    s: 0,
-    d: 0
-  },
-  WomensD: {
-    s: 0,
-    d: 0
-  },
-  MixedOpen: {
-    s: 0,
-    d: 0
-  },
-  MixedA: {
-    s: 0,
-    d: 0
-  },
-  MixedB: {
-    s: 0,
-    d: 0
-  },
-  MixedC: {
-    s: 0,
-    d: 0
-  },
-  MixedD: {
-    s: 0,
-    d: 0
   }
 };
 
@@ -244,21 +255,31 @@ var CUSTOM_LEVEL_DEFAULT = {
   d: 8
 };
 
-// Women's singles/doubles and Mixed singles start with consolation unchecked
-// (doubles consolation already defaults to unchecked for every level)
+// Mixed has no singles column (doubles-only division), so its singles
+// consolation is never applicable
 function defaultSconsFor(code) {
-  return !/^Womens/.test(code) && !/^Mixed/.test(code);
+  return !/^Mixed/.test(code);
+}
+// Mixed doubles starts with consolation checked by default
+// (Women's doubles starts unchecked, same as the base Open/A/B/C/D levels)
+function defaultDconsFor(code) {
+  return /^Mixed/.test(code);
 }
 function makeInitLevels(levelList) {
   var list = levelList || LEVELS;
   var out = {};
   list.forEach(function (d) {
     var p = PRESET_DEFAULT[d.code] || CUSTOM_LEVEL_DEFAULT;
+    // Categories that start unchecked (see DEFAULT_GENDER_FILTERS) begin cleared,
+    // matching what unchecking that filter would do
+    var shown = DEFAULT_GENDER_FILTERS[categoryFor(d.code)];
     out[d.code] = {
-      s: p.s,
-      d: p.d,
-      scons: defaultSconsFor(d.code),
-      dcons: false
+      s: shown ? p.s : 0,
+      d: shown ? p.d : 0,
+      scons: shown && defaultSconsFor(d.code) && p.s >= 4,
+      dcons: shown && defaultDconsFor(d.code) && p.d >= 4,
+      sRR: 0,
+      dRR: 0
     };
   });
   return out;
@@ -274,11 +295,62 @@ const DrawSizeCalc = () => {
   const [newLevelName, setNewLevelName] = React.useState("");
   const allLevels = React.useMemo(() => [...LEVELS, ...extraLevels], [extraLevels]);
   const [levels, setLevels] = React.useState(() => makeInitLevels(LEVELS));
+  // Which gender sections are shown in the Levels table. Checking a section
+  // applies its default draw sizes; unchecking clears every level in it
+  // (draw sizes, cons, RR groups) so it drops out of the totals too, not
+  // just the table.
+  const [genderFilters, setGenderFilters] = React.useState(() => Object.assign({}, DEFAULT_GENDER_FILTERS));
+  function defaultsForCategory(key) {
+    // Mixed has no singles column — only doubles gets a default, with cons on
+    if (key === "mixed") {
+      return {
+        s: 0,
+        d: 16,
+        scons: false,
+        dcons: true,
+        sRR: 0,
+        dRR: 0
+      };
+    }
+    return {
+      s: 16,
+      d: 16,
+      scons: true,
+      dcons: false,
+      sRR: 0,
+      dRR: 0
+    };
+  }
+  function toggleGenderFilter(key) {
+    setGenderFilters(prev => {
+      var wasChecked = prev[key];
+      var patch = wasChecked ? {
+        s: 0,
+        d: 0,
+        scons: false,
+        dcons: false,
+        sRR: 0,
+        dRR: 0
+      } : defaultsForCategory(key);
+      setLevels(lv => {
+        var next = Object.assign({}, lv);
+        allLevels.forEach(function (level) {
+          if (categoryFor(level.code) === key) {
+            next[level.code] = Object.assign({}, next[level.code], patch);
+          }
+        });
+        return next;
+      });
+      return Object.assign({}, prev, {
+        [key]: !wasChecked
+      });
+    });
+  }
   // Raw string values for draw inputs — keeps display in sync while typing
   // without committing intermediate values that would hide consolation checkboxes
   const [rawLevels, setRawLevels] = React.useState({});
   function getRaw(code, field) {
-    return rawLevels[code] && rawLevels[code][field] != null ? rawLevels[code][field] : "";
+    return rawLevels[code] && rawLevels[code][field] != null ? rawLevels[code][field] : null;
   }
   function setRaw(code, field, val) {
     setRawLevels(function (prev) {
@@ -334,15 +406,20 @@ const DrawSizeCalc = () => {
       [code]: Object.assign({}, prev[code], patch)
     }));
   }
-  function applyPreset(preset) {
+  // Reduce every level's current draw sizes by ~10% (floor), leaving
+  // cons/round-robin settings as-is unless they're no longer eligible
+  function applySafety() {
     setLevels(prev => {
       var next = {};
       allLevels.forEach(function (d) {
-        var p = preset[d.code] || CUSTOM_LEVEL_DEFAULT;
-        next[d.code] = Object.assign({}, prev[d.code], {
-          s: p.s,
-          d: p.d,
-          scons: preset === PRESET_DEFAULT ? defaultSconsFor(d.code) : prev[d.code] && prev[d.code].s >= 4 ? prev[d.code].scons : false
+        var cur = prev[d.code] || CUSTOM_LEVEL_DEFAULT;
+        var s = Math.max(0, Math.floor((cur.s || 0) * 0.9));
+        var dd = Math.max(0, Math.floor((cur.d || 0) * 0.9));
+        next[d.code] = Object.assign({}, cur, {
+          s: s,
+          d: dd,
+          scons: consEligible(s, cur.sRR) ? cur.scons : false,
+          dcons: consEligible(dd, cur.dRR) ? cur.dcons : false
         });
       });
       return next;
@@ -364,7 +441,9 @@ const DrawSizeCalc = () => {
         s: CUSTOM_LEVEL_DEFAULT.s,
         d: CUSTOM_LEVEL_DEFAULT.d,
         scons: true,
-        dcons: false
+        dcons: false,
+        sRR: 0,
+        dRR: 0
       }
     }));
     setNewLevelName("");
@@ -382,7 +461,7 @@ const DrawSizeCalc = () => {
     totalTeams = 0;
   allLevels.forEach(function (d) {
     if (!levels[d.code]) return;
-    totalMatches += calcSinglesMatches(levels[d.code].s, levels[d.code].scons) + calcDoublesMatches(levels[d.code].d, levels[d.code].dcons);
+    totalMatches += calcSinglesMatches(levels[d.code].s, levels[d.code].scons, levels[d.code].sRR) + calcDoublesMatches(levels[d.code].d, levels[d.code].dcons, levels[d.code].dRR);
     totalPlayers += levels[d.code].s;
     totalTeams += levels[d.code].d;
   });
@@ -391,8 +470,8 @@ const DrawSizeCalc = () => {
   for (di = 0; di < days; di++) dayTotals.push(0);
   allLevels.forEach(function (level) {
     if (!levels[level.code]) return;
-    var ss = scheduleByDay(levels[level.code].s, days, levels[level.code].scons);
-    var ds = scheduleByDay(levels[level.code].d, days, levels[level.code].dcons);
+    var ss = scheduleByDay(levels[level.code].s, days, levels[level.code].scons, levels[level.code].sRR);
+    var ds = scheduleByDay(levels[level.code].d, days, levels[level.code].dcons, levels[level.code].dRR);
     for (di = 0; di < days; di++) dayTotals[di] += (ss[di] || 0) + (ds[di] || 0);
   });
   var statusColor = totalMatches <= safeSlots ? "#2d7a2d" : totalMatches <= maxSlots ? "#8a6000" : "#b52222";
@@ -427,6 +506,32 @@ const DrawSizeCalc = () => {
     width: "100%",
     boxSizing: "border-box"
   });
+  // Native <select> arrows sit flush against the border regardless of CSS
+  // padding, so a real gap needs a custom arrow drawn with appearance:none
+  var rrSelectStyle = Object.assign({}, numInputStyle, {
+    width: 50,
+    padding: "5px 20px 5px 6px",
+    cursor: "pointer",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238A857A' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 7px center",
+    backgroundSize: "8px 5px"
+  });
+  var RR_GROUP_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  function renderRRSelect(value, onChange) {
+    return /*#__PURE__*/React.createElement("select", {
+      value: value || 0,
+      onChange: e => onChange(Number(e.target.value)),
+      className: "calc-input",
+      style: rrSelectStyle
+    }, RR_GROUP_OPTIONS.map(g => /*#__PURE__*/React.createElement("option", {
+      key: g,
+      value: g
+    }, g === 0 ? "—" : g + "g")));
+  }
   var labelRow = {
     fontSize: 10,
     fontWeight: 700,
@@ -452,25 +557,7 @@ const DrawSizeCalc = () => {
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     className: "label"
-  }, "DRAW SIZE CALCULATOR")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    style: {
-      fontSize: 11
-    },
-    onClick: () => applyPreset(PRESET_DEFAULT)
-  }, "Default"), /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    style: {
-      fontSize: 11
-    },
-    onClick: () => applyPreset(PRESET_SAFE)
-  }, "Max safety"))), /*#__PURE__*/React.createElement("div", {
+  }, "DRAW SIZE CALCULATOR"))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: 0,
@@ -514,8 +601,8 @@ const DrawSizeCalc = () => {
     min: 1,
     max: 5,
     onChange: e => {
-      var v = Number(e.target.value);
-      if (!isNaN(v)) setDays(Math.max(1, Math.min(5, v)));
+      var v = e.target.value === "" ? 0 : Number(e.target.value);
+      if (!isNaN(v)) setDays(v);
     },
     onBlur: e => setDays(Math.max(1, Math.min(5, Number(e.target.value) || 1))),
     onKeyDown: e => {
@@ -523,7 +610,7 @@ const DrawSizeCalc = () => {
     },
     className: "calc-input",
     style: Object.assign({}, numInputStyle, {
-      width: 52
+      width: 50
     })
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -544,8 +631,8 @@ const DrawSizeCalc = () => {
     min: 30,
     max: 240,
     onChange: e => {
-      var v = Number(e.target.value);
-      if (!isNaN(v) && v >= 1) setSlotDur(v);
+      var v = e.target.value === "" ? 0 : Number(e.target.value);
+      if (!isNaN(v)) setSlotDur(v);
     },
     onBlur: e => setSlotDur(Math.max(30, Math.min(240, Number(e.target.value) || 90))),
     onKeyDown: e => {
@@ -553,7 +640,7 @@ const DrawSizeCalc = () => {
     },
     className: "calc-input",
     style: Object.assign({}, numInputStyle, {
-      width: 52
+      width: 50
     })
   }), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -634,11 +721,13 @@ const DrawSizeCalc = () => {
   }, /*#__PURE__*/React.createElement("input", {
     type: "number",
     value: c,
+    min: 0,
+    max: 40,
     onChange: e => {
-      var v = Number(e.target.value);
-      if (!isNaN(v) && v >= 1) setCourtsPerDay(prev => {
+      var v = e.target.value === "" ? 0 : Number(e.target.value);
+      if (!isNaN(v)) setCourtsPerDay(prev => {
         var n = prev.slice();
-        n[i] = v;
+        n[i] = Math.max(0, v);
         return n;
       });
     },
@@ -656,7 +745,7 @@ const DrawSizeCalc = () => {
     className: "calc-input",
     style: Object.assign({}, numInputStyle, {
       width: "100%",
-      maxWidth: 64
+      maxWidth: 50
     })
   }))), /*#__PURE__*/React.createElement("td", {
     style: {
@@ -687,16 +776,18 @@ const DrawSizeCalc = () => {
   }, /*#__PURE__*/React.createElement("input", {
     type: "number",
     value: h,
+    min: 0,
+    max: 24,
     onChange: e => {
-      var v = Number(e.target.value);
-      if (!isNaN(v) && v >= 1) setHrsDays(prev => {
+      var v = e.target.value === "" ? 0 : Number(e.target.value);
+      if (!isNaN(v)) setHrsDays(prev => {
         var n = prev.slice();
-        n[i] = v;
+        n[i] = Math.max(0, Math.min(24, v));
         return n;
       });
     },
     onBlur: e => {
-      var v = Math.max(4, Math.min(18, Number(e.target.value) || 14));
+      var v = Math.max(0, Math.min(24, Number(e.target.value) || 14));
       setHrsDays(prev => {
         var n = prev.slice();
         n[i] = v;
@@ -709,7 +800,7 @@ const DrawSizeCalc = () => {
     className: "calc-input",
     style: Object.assign({}, numInputStyle, {
       width: "100%",
-      maxWidth: 64
+      maxWidth: 50
     })
   }))), /*#__PURE__*/React.createElement("td", {
     style: {
@@ -865,10 +956,52 @@ const DrawSizeCalc = () => {
       minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: Object.assign({}, labelRow, {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 8,
       marginBottom: 10
-    })
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: labelRow
   }, "Levels"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      flexWrap: "wrap"
+    }
+  }, GENDER_FILTERS.map(([key, label]) => /*#__PURE__*/React.createElement("label", {
+    key: key,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      fontSize: 11,
+      fontWeight: 600,
+      color: "var(--ink-muted)",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: genderFilters[key],
+    onChange: () => toggleGenderFilter(key),
+    style: {
+      width: 14,
+      height: 14,
+      accentColor: "var(--chart-deep)",
+      cursor: "pointer"
+    }
+  }), label)), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    style: {
+      fontSize: 11,
+      marginLeft: "auto"
+    },
+    onClick: () => applySafety()
+  }, "Max safety"))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: 0,
@@ -900,17 +1033,23 @@ const DrawSizeCalc = () => {
       textTransform: "uppercase",
       whiteSpace: "nowrap"
     }
-  }, "Level"), ["Singles", "Cons", "Seeds", "Doubles", "Cons", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
+  }, "Level"), ["Singles", "Cons", "RR", "Seeds", "Doubles", "Cons", "RR", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
-    style: thStyle
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, allLevels.map((level, i) => {
-    if (!levels[level.code]) return null;
+    style: h === "Seeds" ? Object.assign({}, thStyle, {
+      padding: "6px 0 8px 0"
+    }) : thStyle
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, allLevels.filter(level => {
+    var cat = categoryFor(level.code);
+    return levels[level.code] && (cat === "custom" || genderFilters[cat]);
+  }).map((level, i) => {
     var s = levels[level.code].s,
       d = levels[level.code].d;
     var scons = levels[level.code].scons,
       dcons = levels[level.code].dcons;
-    var sm = calcSinglesMatches(s, scons),
-      dm = calcDoublesMatches(d, dcons);
+    var sRR = levels[level.code].sRR,
+      dRR = levels[level.code].dRR;
+    var sm = calcSinglesMatches(s, scons, sRR),
+      dm = calcDoublesMatches(d, dcons, dRR);
     var isMixed = /^Mixed/.test(level.code);
     return /*#__PURE__*/React.createElement("tr", {
       key: level.code,
@@ -943,7 +1082,7 @@ const DrawSizeCalc = () => {
       }
     }, "—") : /*#__PURE__*/React.createElement("input", {
       type: "number",
-      value: getRaw(level.code, "s") !== "" ? getRaw(level.code, "s") : s === 0 ? "" : s,
+      value: getRaw(level.code, "s") != null ? getRaw(level.code, "s") : s === 0 ? "" : s,
       placeholder: "0",
       min: 0,
       max: 64,
@@ -953,7 +1092,7 @@ const DrawSizeCalc = () => {
         var v = e.target.value === "" ? 0 : Math.max(0, Math.min(64, Number(e.target.value) || 0));
         updateLevel(level.code, {
           s: v,
-          scons: v < 4 ? false : scons
+          scons: consEligible(v, sRR) ? scons : false
         });
       },
       onKeyDown: e => {
@@ -966,13 +1105,14 @@ const DrawSizeCalc = () => {
     })), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "5px 6px",
-        textAlign: "center"
+        textAlign: "center",
+        verticalAlign: "middle"
       }
     }, isMixed ? /*#__PURE__*/React.createElement("span", {
       style: {
         color: "var(--muted)"
       }
-    }, "—") : s >= 4 ? /*#__PURE__*/React.createElement("input", {
+    }, "—") : consEligible(s, sRR) ? /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
       checked: scons,
       onChange: e => updateLevel(level.code, {
@@ -981,6 +1121,8 @@ const DrawSizeCalc = () => {
       style: {
         width: 15,
         height: 15,
+        verticalAlign: "middle",
+        marginTop: -1,
         accentColor: "var(--chart-deep)",
         cursor: "pointer"
       }
@@ -991,6 +1133,18 @@ const DrawSizeCalc = () => {
     }, "\u2014")), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "5px 6px",
+        textAlign: "center"
+      }
+    }, isMixed ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "—") : renderRRSelect(sRR, v => updateLevel(level.code, {
+      sRR: v,
+      scons: consEligible(s, v) ? scons : false
+    }))), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: "5px 0",
         textAlign: "center"
       }
     }, /*#__PURE__*/React.createElement("span", {
@@ -1006,7 +1160,7 @@ const DrawSizeCalc = () => {
       }
     }, /*#__PURE__*/React.createElement("input", {
       type: "number",
-      value: getRaw(level.code, "d") !== "" ? getRaw(level.code, "d") : d === 0 ? "" : d,
+      value: getRaw(level.code, "d") != null ? getRaw(level.code, "d") : d === 0 ? "" : d,
       placeholder: "0",
       min: 0,
       max: 64,
@@ -1016,7 +1170,7 @@ const DrawSizeCalc = () => {
         var v = e.target.value === "" ? 0 : Math.max(0, Math.min(64, Number(e.target.value) || 0));
         updateLevel(level.code, {
           d: v,
-          dcons: v < 4 ? false : dcons
+          dcons: consEligible(v, dRR) ? dcons : false
         });
       },
       onKeyDown: e => {
@@ -1029,9 +1183,10 @@ const DrawSizeCalc = () => {
     })), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "5px 6px",
-        textAlign: "center"
+        textAlign: "center",
+        verticalAlign: "middle"
       }
-    }, d >= 4 ? /*#__PURE__*/React.createElement("input", {
+    }, consEligible(d, dRR) ? /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
       checked: dcons,
       onChange: e => updateLevel(level.code, {
@@ -1040,6 +1195,8 @@ const DrawSizeCalc = () => {
       style: {
         width: 15,
         height: 15,
+        verticalAlign: "middle",
+        marginTop: -1,
         accentColor: "var(--chart-deep)",
         cursor: "pointer"
       }
@@ -1050,6 +1207,14 @@ const DrawSizeCalc = () => {
     }, "\u2014")), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "5px 6px",
+        textAlign: "center"
+      }
+    }, renderRRSelect(dRR, v => updateLevel(level.code, {
+      dRR: v,
+      dcons: consEligible(d, v) ? dcons : false
+    }))), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: "5px 0",
         textAlign: "center"
       }
     }, /*#__PURE__*/React.createElement("span", {
@@ -1111,7 +1276,7 @@ const DrawSizeCalc = () => {
       letterSpacing: "0.07em"
     }
   }, "Total"), /*#__PURE__*/React.createElement("td", {
-    colSpan: 2,
+    colSpan: 3,
     style: {
       padding: "8px 6px",
       textAlign: "center"
@@ -1123,7 +1288,7 @@ const DrawSizeCalc = () => {
       fontWeight: 700
     }
   }, totalPlayers, " players")), /*#__PURE__*/React.createElement("td", null), /*#__PURE__*/React.createElement("td", {
-    colSpan: 2,
+    colSpan: 3,
     style: {
       padding: "8px 6px",
       textAlign: "center"
@@ -1174,7 +1339,7 @@ const DrawSizeCalc = () => {
     onKeyDown: e => {
       if (e.key === "Enter") addLevel();
     },
-    placeholder: "e.g. 40+ Open",
+    placeholder: "e.g. Open 40+",
     style: {
       flex: 1,
       minWidth: 0,
@@ -1314,8 +1479,8 @@ const DrawSizeCalc = () => {
     var s = levels[level.code].s,
       d = levels[level.code].d;
     if (s === 0 && d === 0) return null;
-    var ss = scheduleByDay(s, days, levels[level.code].scons);
-    var ds = scheduleByDay(d, days, levels[level.code].dcons);
+    var ss = scheduleByDay(s, days, levels[level.code].scons, levels[level.code].sRR);
+    var ds = scheduleByDay(d, days, levels[level.code].dcons, levels[level.code].dRR);
     return /*#__PURE__*/React.createElement("div", {
       key: level.code,
       style: {
@@ -1357,7 +1522,7 @@ const DrawSizeCalc = () => {
         fontSize: 10,
         color: "var(--muted)"
       }
-    }, "=", calcSinglesMatches(s, levels[level.code].scons) + calcDoublesMatches(d, levels[level.code].dcons)));
+    }, "=", calcSinglesMatches(s, levels[level.code].scons, levels[level.code].sRR) + calcDoublesMatches(d, levels[level.code].dcons, levels[level.code].dRR)));
   }))))));
 };
 
