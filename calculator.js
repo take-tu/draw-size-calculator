@@ -509,7 +509,7 @@ const DrawSizeCalc = () => {
   // Native <select> arrows sit flush against the border regardless of CSS
   // padding, so a real gap needs a custom arrow drawn with appearance:none
   var rrSelectStyle = Object.assign({}, numInputStyle, {
-    width: 50,
+    width: 72,
     padding: "5px 20px 5px 6px",
     cursor: "pointer",
     appearance: "none",
@@ -530,7 +530,7 @@ const DrawSizeCalc = () => {
     }, RR_GROUP_OPTIONS.map(g => /*#__PURE__*/React.createElement("option", {
       key: g,
       value: g
-    }, g === 0 ? "—" : g + "g")));
+    }, g === 0 ? "—" : g + (g === 1 ? " grp" : " grps"))));
   }
   var labelRow = {
     fontSize: 10,
