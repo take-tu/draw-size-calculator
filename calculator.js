@@ -1033,7 +1033,7 @@ const DrawSizeCalc = () => {
       textTransform: "uppercase",
       whiteSpace: "nowrap"
     }
-  }, "Level"), ["Singles", "Cons", "RR", "Seeds", "Doubles", "Cons", "RR", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
+  }, "Level"), ["Singles", "Cons", "RR", "Seeds", "DBLS TMS", "Cons", "RR", "Seeds", "Matches", ""].map((h, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
     style: h === "Seeds" ? Object.assign({}, thStyle, {
       padding: "6px 0 8px 0"
